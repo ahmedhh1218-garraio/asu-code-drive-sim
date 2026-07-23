@@ -9,7 +9,7 @@ they would run on the real Raspberry Pi / BeagleBone build.
 
 | Path | Purpose |
 |------|---------|
-| `bridge_node.py` | TCP bridge server. Translates the car app's JSON motion/sensor protocol into Gazebo `/cmd_vel` twists and ray-sensor distances. Falls back to synthetic sensors when Gazebo transport is missing. |
+| `bridge_node.py` | TCP bridge server. Translates the car app's JSON motion/sensor protocol into Gazebo `/cmd_vel` twists, ray-sensor distances and IMU readings. Falls back to synthetic sensors when Gazebo transport is missing. |
 | `teleop_car.py` | Gamepad / keyboard teleop that publishes `/cmd_vel` twists — used to generate demonstration data in simulation. |
 | `launch_sim.sh` | Launches the Gazebo maze world with the car model. |
 | `launch_full_stack.sh` | Starts the bridge node and teleop node together. |
@@ -26,11 +26,22 @@ they would run on the real Raspberry Pi / BeagleBone build.
 └─────────────────────┘   motion / sensors       └──────────────────┘   /cmd_vel · sensors   └──────────┘
 ```
 
-- The app sends `{"type":"motion","action":...}` and `{"type":"sensors"}` messages.
+- The app sends `{"type":"motion","action":...}`, `{"type":"sensors"}` and
+  `{"type":"imu"}` messages.
 - The bridge converts motion into Gazebo twist messages and returns ray-sensor
-  distances (in centimetres).
+  distances (in centimetres) and 6-axis IMU features (normalised).
 - If `gz.transport` is not installed, the bridge serves **synthetic** sensor data
   so the protocol and the QEMU side can still be tested end to end.
+
+## Sensor suite
+
+The simulated car mirrors the physical hardware:
+
+- **Three ultrasonic-style distance sensors** — `front`, `front_left` and
+  `front_right` (modelled as single-ray lidars aimed forward and ~±45°).
+- **A 6-axis IMU** — 3-axis accelerometer + 3-axis gyroscope
+  (`ax, ay, az, gx, gy, gz`), published on `car/imu` and returned normalised to
+  roughly `[-1, 1]`.
 
 ## Requirements
 

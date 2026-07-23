@@ -26,6 +26,7 @@ class SimBridgeClient:
         self._last_distances = {
             name: config.MAX_DISTANCE_CM for name in config.SENSOR_NAMES
         }
+        self._last_imu = [0.0] * len(config.IMU_FEATURE_NAMES)
         self._connect()
 
     def _connect(self):
@@ -68,6 +69,15 @@ class SimBridgeClient:
                 for name in config.SENSOR_NAMES
             }
         return dict(self._last_distances)
+
+    def get_imu(self):
+        """Request the latest simulated IMU features ``[ax,ay,az,gx,gy,gz]``."""
+        reply = self._send({"type": "imu"})
+        if reply and "imu" in reply:
+            values = reply["imu"]
+            if isinstance(values, list) and len(values) == len(config.IMU_FEATURE_NAMES):
+                self._last_imu = [float(v) for v in values]
+        return list(self._last_imu)
 
     def close(self):
         if self._sock:

@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!-- Differential-drive car with five ray (lidar-style) distance sensors. -->
+<!-- Differential-drive car with three ray (lidar-style) distance sensors and an IMU. -->
 <sdf version="1.8">
   <model name="car">
     <pose>0 0 0.05 0 0 0</pose>
@@ -39,19 +39,13 @@
         <lidar><scan><horizontal><samples>1</samples><resolution>1</resolution><min_angle>0</min_angle><max_angle>0</max_angle></horizontal></scan>
           <range><min>0.02</min><max>2.0</max><resolution>0.01</resolution></range></lidar>
       </sensor>
-      <sensor name="left" type="gpu_lidar">
-        <pose>0 0.075 0.05 0 0 1.571</pose>
-        <update_rate>10</update_rate>
-        <topic>car/sensors/left</topic>
-        <lidar><scan><horizontal><samples>1</samples><resolution>1</resolution><min_angle>0</min_angle><max_angle>0</max_angle></horizontal></scan>
-          <range><min>0.02</min><max>2.0</max><resolution>0.01</resolution></range></lidar>
-      </sensor>
-      <sensor name="right" type="gpu_lidar">
-        <pose>0 -0.075 0.05 0 0 -1.571</pose>
-        <update_rate>10</update_rate>
-        <topic>car/sensors/right</topic>
-        <lidar><scan><horizontal><samples>1</samples><resolution>1</resolution><min_angle>0</min_angle><max_angle>0</max_angle></horizontal></scan>
-          <range><min>0.02</min><max>2.0</max><resolution>0.01</resolution></range></lidar>
+
+      <!-- Inertial measurement unit: 6-axis (accel + gyro), maps to app IMU features -->
+      <sensor name="imu" type="imu">
+        <pose>0 0 0.05 0 0 0</pose>
+        <always_on>1</always_on>
+        <update_rate>50</update_rate>
+        <topic>car/imu</topic>
       </sensor>
     </link>
 
