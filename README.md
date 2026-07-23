@@ -49,11 +49,54 @@ they would run on the real Raspberry Pi / BeagleBone build.
    ```bash
    ./launch_full_stack.sh
    ```
-3. From the car application (inside QEMU or on a laptop), point
-   `SIM_BRIDGE_HOST` / `SIM_BRIDGE_PORT` at the machine running the bridge
-   (default port `9000`) and use `qemu_client/sim_bridge_client.py`.
+3. Boot your QEMU car image (the one you built during the sessions) and
+   connect it to the bridge — see below.
+
+## Connect your QEMU car to the sim
+
+The car image you built in the course already runs in **simulation mode**
+(`CAR_SIM=1`), so on boot the app tries to reach the bridge over TCP. You just
+need the app to point at the host running this repo. The correct address
+depends on how you launch QEMU:
+
+| QEMU network mode | How you launched it | `SIM_BRIDGE_HOST` to use |
+|-------------------|---------------------|--------------------------|
+| **User-mode (SLIRP)** — the default | `runqemu qemuarm64` | `10.0.2.2` (already the default) |
+| **TAP / bridged** | `runqemu qemuarm64 ... slirp`-disabled, guest gets `192.168.7.2` | `192.168.7.1` (the host end of the tap link) |
+
+1. On the **host**, start the world and bridge (two terminals):
+   ```bash
+   ./launch_sim.sh          # terminal 1 — Gazebo maze
+   ./launch_full_stack.sh   # terminal 2 — bridge (port 9000) + teleop
+   ```
+2. **Boot QEMU.** If you use the default `runqemu` (SLIRP), nothing else is
+   needed — the app reaches the host at `10.0.2.2:9000` automatically.
+3. If you use **tap** networking, tell the app the host address before it
+   starts (inside the guest):
+   ```bash
+   export SIM_BRIDGE_HOST=192.168.7.1
+   export SIM_BRIDGE_PORT=9000
+   # then start the car app (or restart the car-training service)
+   ```
+4. **Watch Gazebo.** As the app (teleop, or your trained model) sends motion
+   commands, the car drives through the maze and the ray sensors feed live
+   distances back to the app. That's your visual test.
+
+### Quick check it's connected
+
+- The bridge terminal logs `motion` / `sensors` messages when the app is talking to it.
+- If the car doesn't move: confirm the host/port match your QEMU network mode,
+  and that port `9000` isn't blocked by a firewall.
+
+### No QEMU? Run it all on your laptop
+
+You can also see the car drive without QEMU — run the car app directly on the
+host with `CAR_SIM=1` pointing at `127.0.0.1`. Same bridge, same Gazebo window,
+much faster iteration while experimenting.
 
 ## Notes
 
 - The bridge port can be overridden with `SIM_BRIDGE_PORT` (default `9000`).
 - `launch_sim.sh` sets `GZ_SIM_RESOURCE_PATH` so Gazebo can find the local car model.
+- If Gazebo transport bindings aren't installed, the bridge serves **synthetic**
+  sensor data so the protocol still works end to end (you just won't see physics).
