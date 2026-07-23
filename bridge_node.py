@@ -16,6 +16,7 @@ import json
 import logging
 import math
 import socketserver
+import subprocess
 import threading
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -27,6 +28,9 @@ MAX_DISTANCE_CM = 200.0
 # Linear/angular speeds applied for each discrete action.
 LINEAR_SPEED = 0.3  # m/s
 ANGULAR_SPEED = 1.2  # rad/s
+# Fraction of the full turn rate applied during a forward arc (forward_left /
+# forward_right) so the car curves instead of spinning in place.
+ARC_TURN_RATIO = 0.6
 
 # IMU normalisation constants. These mirror app/config.py so the simulated IMU
 # lands in the same roughly [-1, 1] range the hardware MPU6050 produces.
@@ -39,7 +43,8 @@ IMU_ZEROS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [ax, ay, az, gx, gy, gz]
 class GazeboLink:
     """Thin wrapper around gz.transport. Falls back to a stub when missing."""
 
-    def __init__(self):
+    def __init__(self, world="maze"):
+        self._world = world
         self._distances = {name: MAX_DISTANCE_CM for name in SENSOR_NAMES}
         self._imu = list(IMU_ZEROS)
         self._lock = threading.Lock()
@@ -107,12 +112,38 @@ class GazeboLink:
             angular = ANGULAR_SPEED * scale
         elif action == "right":
             angular = -ANGULAR_SPEED * scale
+        elif action == "forward_left":
+            linear = LINEAR_SPEED * scale
+            angular = ANGULAR_SPEED * scale * ARC_TURN_RATIO
+        elif action == "forward_right":
+            linear = LINEAR_SPEED * scale
+            angular = -ANGULAR_SPEED * scale * ARC_TURN_RATIO
 
         if self._node and self._cmd_pub:
             msg = self._Twist()
             msg.linear.x = linear
             msg.angular.z = angular
             self._cmd_pub.publish(msg)
+
+    def reset_world(self):
+        """Reset every model pose in the world back to its initial state."""
+        cmd = [
+            "gz", "service", "-s", f"/world/{self._world}/control",
+            "--reqtype", "gz.msgs.WorldControl",
+            "--reptype", "gz.msgs.Boolean",
+            "--timeout", "3000",
+            "--req", "reset: {all: true}",
+        ]
+        try:
+            subprocess.run(
+                cmd, check=False, timeout=5,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            log.info("World '%s' reset to start.", self._world)
+            return True
+        except Exception as exc:  # pragma: no cover - runtime dependent
+            log.warning("World reset failed: %s", exc)
+            return False
 
     def distances_cm(self):
         with self._lock:
@@ -143,6 +174,8 @@ class BridgeHandler(socketserver.StreamRequestHandler):
                 self._reply({"distances": link.distances_cm()})
             elif msg.get("type") == "imu":
                 self._reply({"imu": link.imu_normalized()})
+            elif msg.get("type") == "reset":
+                self._reply({"ok": link.reset_world()})
             else:
                 self._reply({"error": "unknown message type"})
         log.info("Client disconnected: %s", self.client_address)
@@ -161,9 +194,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="QEMU <-> Gazebo bridge")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
+    parser.add_argument("--world", default="maze", help="Gazebo world name to reset")
     args = parser.parse_args(argv)
 
-    gazebo = GazeboLink()
+    gazebo = GazeboLink(world=args.world)
     server = BridgeServer((args.host, args.port), BridgeHandler)
     server.gazebo = gazebo
     log.info("Bridge listening on %s:%d", args.host, args.port)
